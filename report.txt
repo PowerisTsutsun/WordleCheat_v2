@@ -1,0 +1,13 @@
+My wordle had 06/04/2025 : {[C], [A], [D], [E], [E]}
+
+but when I put it in the code, it gave me a word "that only has one E, even though orginal answer has 2 E's in it," Right word was "CEASE"
+even though such word was included in word.json, it was ignored.
+
+1. program failed to figure double Es WHEN 1 E WAS CONSIDERED CORRECT: 
+        reason : since the word already has a correct E, it ignored the next E (didn't remove from usability)
+
+THIS IS A BUG, FIX IT!!!!
+
+
+
+[I tried to fix the bug but that issue no longer works???]
