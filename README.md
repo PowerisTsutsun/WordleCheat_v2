@@ -15,12 +15,12 @@ It includes multiple modules for handling word data, UI widgets, effects, and pu
 ├── utils.py              # Helper/utility functions
 ├── widgets.py            # UI widget components
 │
-├── words.json # Word dataset
-├── wordsnew.json # Extended/updated word dataset
+├── words.json            # Word dataset
+├── wordsnew.json         # Extended/updated word dataset
 │
-├── requirements.txt # Python dependencies
-├── report.txt # Notes / report file
-├── README.md # Project documentation
+├── requirements.txt      # Python dependencies
+├── report.txt            # Notes / report file
+├── README.md 
 ```
 
 
@@ -62,4 +62,5 @@ python app.py
 # 🤝 Contributing
 
 Feel free to fork the repo, improve the solver, and submit pull requests! 💡
+
 
