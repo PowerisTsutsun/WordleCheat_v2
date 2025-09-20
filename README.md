@@ -7,13 +7,13 @@ It includes multiple modules for handling word data, UI widgets, effects, and pu
 
 
 ```
-├── app.py # Main entry point of the application
-├── effects.py # Visual or game effects
-├── gui.py # Graphical user interface handling
-├── palettes.py # Color/style palette settings
-├── solver.py # Core puzzle/word-solving logic
-├── utils.py # Helper/utility functions
-├── widgets.py # UI widget components
+├── app.py                # Main entry point of the application
+├── effects.py            # Visual or game effects
+├── gui.py                # Graphical user interface handling
+├── palettes.py           # Color/style palette settings
+├── solver.py             # Core puzzle/word-solving logic
+├── utils.py              # Helper/utility functions
+├── widgets.py            # UI widget components
 │
 ├── words.json # Word dataset
 ├── wordsnew.json # Extended/updated word dataset
@@ -62,3 +62,4 @@ python app.py
 # 🤝 Contributing
 
 Feel free to fork the repo, improve the solver, and submit pull requests! 💡
+
