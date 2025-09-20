@@ -1,28 +1,36 @@
-# Wordle Solver
-A Tkinter-based Wordle Solver that helps you solve Wordle puzzles by suggesting words based on feedback (green, yellow, grey).
+# Word Puzzle Solver
 
-# 📁 Folder Structure
+This repository contains a Python-based word puzzle/solver application.  
+It includes multiple modules for handling word data, UI widgets, effects, and puzzle-solving logic.
+
+## 📂 Project Structure
+
 
 ```
-wordle_solver_project/
-├── app.py                      # Main Tkinter GUI script
-├── words.json                  # JSON file with 5-letter words
-├── assets/                     # Optional folder for icons, fonts, etc.
-│   ├── logo.ico                # (Optional) Custom window icon
-│   └── custom_font.ttf         # (Optional) Custom font
-└── README.md                   # Project documentation
+├── app.py # Main entry point of the application
+├── effects.py # Visual or game effects
+├── gui.py # Graphical user interface handling
+├── palettes.py # Color/style palette settings
+├── solver.py # Core puzzle/word-solving logic
+├── utils.py # Helper/utility functions
+├── widgets.py # UI widget components
+│
+├── words.json # Word dataset
+├── wordsnew.json # Extended/updated word dataset
+│
+├── requirements.txt # Python dependencies
+├── report.txt # Notes / report file
+├── README.md # Project documentation
 ```
 
-#🚀 Features
 
-- Suggests a random starting word from words.json.
-- Allows the user to input feedback (green, yellow, grey) for each guess.
-- Filters possible words based on feedback and suggests the next best guess.
-- Shows a victory banner when the word is guessed correctly.
-- Reset game and keyboard support (Enter, Backspace).
+## 🚀 Getting Started
 
-## 🛠️ Setup Instructions
-### 1️⃣ Clone the repository
+### 1. Clone the repository
+```bash
+git clone https://github.com/<your-username>/<repo-name>.git
+cd <repo-name>
+
 ```
 git clone https://github.com/yourusername/wordle_solver_project.git
 cd wordle_solver_project
@@ -31,8 +39,11 @@ cd wordle_solver_project
 ### 2️⃣ Install Python dependencies
 
 ```
-python app.py
+pip install -r requirements.txt
 ```
+### 3️⃣ Run the application
+python app.py
+
  ### 4️⃣ Add words.json
 
  ```
@@ -49,4 +60,5 @@ python app.py
 ```
 
 # 🤝 Contributing
+
 Feel free to fork the repo, improve the solver, and submit pull requests! 💡
