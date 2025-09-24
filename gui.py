@@ -1,6 +1,7 @@
 # gui.py
 import sys
 from effects import enable_glass
+from collections import Counter  # Chun : using this for duplicate-letter feedback accounting
 import datetime, random
 import customtkinter as ctk
 from tkinter import messagebox
@@ -17,7 +18,7 @@ class WordleSolverGUI:
 
     def __init__(self, master, words, theme_idx=1):
         self.root = master
-        self.words = [w.upper() for w in words]
+        self.words = words  # Chun : already uppercased in app.py for consistency
         self.max_attempts = 6
         self.theme_idx = theme_idx
 
@@ -44,6 +45,8 @@ class WordleSolverGUI:
         self.present_letters = set()
         self.absent_letters = set()
         self.yellow_positions = set()
+        self.exact_counts = {}     # Chun : track exact duplicate counts when feedback indicates it
+        self.feedback_mode = False # Chun : toggles when user is marking tile feedback
 
     def reset_solver_state(self, fresh=False):
         self._bind_state()
@@ -53,6 +56,8 @@ class WordleSolverGUI:
                     self.tiles[r][c].configure(text="", fg_color=self.pal["grid_default"])
             for b in getattr(self, "key_buttons", {}).values():
                 b.configure(state="normal")
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text="")  # Chun : clear status on reset
 
     # ---------- theme ----------
     def apply_theme(self, idx: int):
@@ -78,7 +83,7 @@ class WordleSolverGUI:
                 self.root.attributes('-alpha', 1.0)
             except Exception:
                 pass
-            self.root.configure(fg_color=self.pal["bg"])
+            # Chun : set bg once below; avoid duplicate configure here
 
 
 
@@ -105,31 +110,20 @@ class WordleSolverGUI:
 
         if hasattr(self, "rand_btn"):
             self.rand_btn.configure(fg_color=self.pal["op"], text_color="#ffffff")
-        if hasattr(self, "submit_btn"):
-            self.submit_btn.configure(fg_color=self.pal["reset"], text_color="#ffffff")
         if hasattr(self, "reset_btn"):
             self.reset_btn.configure(fg_color=self.pal["reset"], text_color="#ffffff")
 
         if hasattr(self, "theme_pills"):
             for i, pill in enumerate(self.theme_pills, start=1):
                 pill.configure(fg_color=self.pal["equals"] if i == self.theme_idx else self.pal["key"])
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text_color=self.pal["text"])  # Chun : keep status text readable per theme
 
     # ---------- layout ----------
     def _build_layout(self):
-        self.root.title("Wordle Solver — Theme")
+        self.root.title("Wordle Cheat")  # Chun : rename to match app vibe
         
-        if self.glass:
-    # overall translucency (safe on CTk)
-            try:
-                self.root.attributes('-alpha', 0.92)   # 0.90–0.96 looks good
-            except Exception:
-                pass
-            enable_glass(self.root, use_mica=False, alpha=170, tint_rgb=(26, 20, 40))
-        else:
-            try:
-                self.root.attributes('-alpha', 1.0)
-            except Exception:
-                pass
+        # Chun : glass/acrylic setup is handled in apply_theme() to avoid duplication here
 
 
         # Header
@@ -154,6 +148,11 @@ class WordleSolverGUI:
         self.board_card = ctk.CTkFrame(self.root, corner_radius=18, height=300)
         self.board_card.pack(fill="x", padx=24, pady=(0, 16))
 
+        # Chun : make the board responsive so tiles scale nicely
+        self.board_card.grid_propagate(False)
+        self.board_card.grid_columnconfigure(0, weight=1)
+        self.board_card.grid_rowconfigure(0, weight=1)
+
         grid = ctk.CTkFrame(self.board_card, fg_color="transparent")
         grid.pack(padx=12, pady=12)
 
@@ -161,11 +160,14 @@ class WordleSolverGUI:
         for r in range(self.max_attempts):
             row = []
             for c in range(5):
-                t = ctk.CTkLabel(grid, text="", width=64, height=64,
-                                 corner_radius=12, fg_color="#222",
-                                 font=self.FONT_LARGE, anchor="center")
+                grid.grid_columnconfigure(c, weight=1)
+                grid.grid_rowconfigure(r, weight=1)
+                t = ctk.CTkLabel(grid, text="", corner_radius=12,
+                                 fg_color="#222", font=self.FONT_LARGE,
+                                 anchor="center")
                 t.grid(row=r, column=c, padx=6, pady=6)
                 row.append(t)
+                t.bind("<Button-1>", lambda e, r=r, c=c: self._on_tile_clicked(r, c))  # Chun : click to set feedback
             self.tiles.append(row)
 
         # Keyboard
@@ -204,7 +206,7 @@ class WordleSolverGUI:
                     rr, text="ENTER",
                     bg=self.pal["equals"], fg=self.pal["equals_txt"],
                     shadow=self.pal["rim"], width=120, height=58,
-                    command=self.process_guess
+                    command=self.handle_enter_key  # Chun : ENTER toggles between marking and confirming feedback
                 )
                 enter.grid(row=0, column=col0, padx=10, pady=(0, 6), sticky="we")
                 self.key_buttons["ENTER"] = enter
@@ -225,22 +227,27 @@ class WordleSolverGUI:
         actions.pack(pady=(0, 16))
         self.rand_btn   = ctk.CTkButton(actions, text="Random", corner_radius=14,
                                         width=110, hover=False, command=self.suggest_initial_word)
-        self.rand_btn.pack(side="left", padx=6)
-        self.submit_btn = ctk.CTkButton(actions, text="Submit", corner_radius=14,
-                                        width=110, hover=False, state="disabled", command=self.process_guess)
-        self.submit_btn.pack(side="left", padx=6)
+        self.rand_btn.pack(side="left", padx=8)
         self.reset_btn  = ctk.CTkButton(actions, text="Reset", corner_radius=14,
                                         width=110, hover=False, command=self.reset_game)
-        self.reset_btn.pack(side="left", padx=6)
+        self.reset_btn.pack(side="left", padx=8)
+
+        # Chun : inline status so users don't get spammed with popups
+        self.status_label = ctk.CTkLabel(self.root, text="", font=self.FONT_SMALL)
+        self.status_label.pack(pady=(0, 10), fill="x", padx=24)
 
         # Bind resize AFTER widgets exist (to kb_card only)
         self._bind_resize()
 
     # -------- responsive keyboard (debounced) ----------
     def _bind_resize(self):
+        # Keyboard
         self.kb_card.bind("<Configure>", self._on_kb_configure)
         # initial pass
         self.root.after(20, self._resize_keys)
+        # Board
+        self.board_card.bind("<Configure>", self._on_board_configure)
+        self.root.after(20, self._resize_board_tiles)  # Chun : kick a first resize so tiles look right
 
     def _on_kb_configure(self, _event):
         # debounce while resizing
@@ -281,29 +288,56 @@ class WordleSolverGUI:
                 w = int(base_w)
             key.set_size(w, key_h, offset=(0, shadow), font_size=font_sz)
 
+    def _on_board_configure(self, _event):
+        if self._resize_job:
+            self.root.after_cancel(self._resize_job)
+        self._resize_job = self.root.after(80, self._resize_board_tiles)
+
+    def _resize_board_tiles(self):
+        self._resize_job = None
+        w = self.board_card.winfo_width()
+        h = self.board_card.winfo_height()
+        if w <= 1 or h <= 1:
+            return
+
+        # Chun : compute tile size based on available width/height
+        gap = 12
+        tile_w = (w - gap * 6) / 5
+        tile_h = (h - gap * 7) / 6
+        size = int(min(tile_w, tile_h))
+        size = max(32, size)  # clamp to sensible min
+
+        font_size = max(16, int(size * 0.5))
+        font = ("Inter", font_size, "bold")
+        radius = max(8, int(size * 0.15))
+
+        for row in self.tiles:
+            for tile in row:
+                tile.configure(width=size, height=size, font=font, corner_radius=radius)
+
     # ---------- input ----------
     def _on_key(self, e):
+        # Chun : still allow Enter to confirm while in feedback mode
+        if e.keysym == "Return":
+            self.handle_enter_key()
+            return
+        if self.feedback_mode:
+            return  # Chun : ignore other typing while setting feedback on tiles
         ch = e.char.upper()
         if ch.isalpha() and len(ch) == 1:
             self.enter_letter(ch)
         elif e.keysym == "BackSpace":
             self.backspace()
-        elif e.keysym == "Return":
-            if len(self.current_guess) == 5:
-                self.process_guess()
 
     def enter_letter(self, letter):
         if len(self.current_guess) < 5 and letter.isalpha():
             self.current_guess += letter
             self._refresh_current_guess()
-            self.submit_btn.configure(state="normal" if len(self.current_guess) == 5 else "disabled")
 
     def backspace(self):
         if self.current_guess:
             self.current_guess = self.current_guess[:-1]
             self._refresh_current_guess()
-            if len(self.current_guess) < 5:
-                self.submit_btn.configure(state="disabled")
 
     def _refresh_current_guess(self):
         for i in range(5):
@@ -314,103 +348,128 @@ class WordleSolverGUI:
     def suggest_initial_word(self):
         if not self.words: return
         w = random.choice(self.words)
-        messagebox.showinfo("Initial Word", f"Try starting with: {w}")
+        # Chun : no modal popup; surface the suggestion inline
         self.current_guess = w
         self._refresh_current_guess()
-        self.submit_btn.configure(state="normal")
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text=f"Starting suggestion: {w}")
 
-    def process_guess(self):
-        if len(self.current_guess) != 5: return
-        guess = self.current_guess.upper()
-        self.get_feedback(guess)
+    def handle_enter_key(self):
+        # Chun : ENTER switches modes. If we're marking feedback, confirm it; otherwise enter feedback mode.
+        if self.feedback_mode:
+            self.commit_feedback()
+        elif len(self.current_guess) == 5:
+            self.enter_feedback_mode()
+
+    def enter_feedback_mode(self):
+        if len(self.current_guess) != 5:
+            return
+        self.feedback_mode = True
+        # Chun : prefill current row as all GREY so cycling is predictable
+        for i in range(5):
+            ch = self.current_guess[i]
+            tile = self.tiles[self.attempts][i]
+            tile.configure(text=ch, fg_color=self.pal["grid_absent"])  # start at grey
+        # flip ENTER to a confirm button so it's obvious
+        if "ENTER" in self.key_buttons and hasattr(self.key_buttons["ENTER"], "_btn"):
+            self.key_buttons["ENTER"]._btn.configure(text="CONFIRM")
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text="Click each tile to set Grey/Yellow/Green, then press CONFIRM.")
 
     # ---------- feedback ----------
-    def get_feedback(self, guess):
-        dlg = ctk.CTkToplevel(self.root)
-        dlg.title(f"Feedback: {guess}")
-        dlg.grab_set()
-        frm = ctk.CTkFrame(dlg)
-        frm.pack(padx=16, pady=16)
+    def _on_tile_clicked(self, r, c):
+        if not self.feedback_mode or r != self.attempts:
+            return
 
-        colors = [self.pal["grid_default"]]*5
-        chips  = []
+        tile = self.tiles[r][c]
+        current_color = tile.cget("fg_color")
 
-        def apply_color(i, kind):
-            col = {"G":self.pal["grid_correct"], "Y":self.pal["grid_present"], "X":self.pal["grid_absent"]}[kind]
-            colors[i] = col
-            chips[i].configure(fg_color=col)
+        # Chun : cycle Grey -> Yellow -> Green on each click for a simple UX
+        color_cycle = [
+            self.pal["grid_absent"],
+            self.pal["grid_present"],
+            self.pal["grid_correct"],
+        ]
 
+        try:
+            idx = color_cycle.index(current_color)
+            next_color = color_cycle[(idx + 1) % len(color_cycle)]
+        except ValueError:
+            next_color = color_cycle[0]
+
+        tile.configure(fg_color=next_color)
+
+    def commit_feedback(self):
+        guess = self.current_guess
+        colors = [self.tiles[self.attempts][i].cget("fg_color") for i in range(5)]
+
+        # Chun : capture duplicate info — if a letter got any non-grey, we know how many occurrences are real
+        guess_counts = Counter(guess)
+        feedback_counts = Counter()
         for i, ch in enumerate(guess):
-            row = ctk.CTkFrame(frm, fg_color="transparent")
-            row.pack(pady=6, fill="x")
+            if colors[i] != self.pal["grid_absent"]:
+                feedback_counts[ch] += 1
 
-            ctk.CTkLabel(row, text=ch, width=30).pack(side="left")
-            ctk.CTkButton(row, text="Green",  width=72, hover=False,
-                          command=lambda k=i: apply_color(k, "G")).pack(side="left", padx=4)
-            ctk.CTkButton(row, text="Yellow", width=72, hover=False,
-                          command=lambda k=i: apply_color(k, "Y")).pack(side="left", padx=4)
-            ctk.CTkButton(row, text="Gray",   width=72, hover=False,
-                          command=lambda k=i: apply_color(k, "X")).pack(side="left", padx=4)
+        for ch, total_count in guess_counts.items():
+            colored_count = feedback_counts[ch]
+            if 0 < colored_count < total_count:
+                self.exact_counts[ch] = colored_count
 
-            chip = ctk.CTkLabel(row, text="  ", width=36, height=28, corner_radius=8,
-                                fg_color=self.pal["grid_default"])
-            chip.pack(side="right", padx=6)
-            chips.append(chip)
+        for i, col in enumerate(colors):
+            char = guess[i]
+            if col == self.pal["grid_correct"]:
+                self.known_word[i] = char
+                self.present_letters.add(char)
+                if (char, i) in self.yellow_positions:
+                    self.yellow_positions.remove((char, i))  # Chun : no longer just yellow here
+            elif col == self.pal["grid_present"]:
+                self.present_letters.add(char)
+                self.yellow_positions.add((char, i))
+            elif col == self.pal["grid_absent"]:
+                if char not in self.present_letters and feedback_counts[char] == 0:
+                    self.absent_letters.add(char)
+                    if char in self.key_buttons:
+                        self.key_buttons[char].configure(state="disabled")
 
-        def commit():
-            for i, col in enumerate(colors):
-                tile = self.tiles[self.attempts][i]
-                tile.configure(text=guess[i], fg_color=col)
+        if all(c == self.pal["grid_correct"] for c in colors):
+            self.show_victory(guess)
+            return
 
-                if col == self.pal["grid_correct"]:
-                    self.known_word[i] = guess[i]
-                    self.present_letters.add(guess[i])
-                elif col == self.pal["grid_present"]:
-                    self.present_letters.add(guess[i])
-                    self.yellow_positions.add((guess[i], i))
-                elif col == self.pal["grid_absent"]:
-                    if guess[i] not in self.known_word and guess[i] not in self.present_letters:
-                        self.absent_letters.add(guess[i])
-                        if guess[i] in self.key_buttons:
-                            self.key_buttons[guess[i]].configure(state="disabled")
+        self.tried_words.append(guess)
+        self.attempts += 1
+        self.current_guess = ""
+        self.feedback_mode = False
+        if "ENTER" in self.key_buttons and hasattr(self.key_buttons["ENTER"], "_btn"):
+            self.key_buttons["ENTER"]._btn.configure(text="ENTER")
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text="")
 
-            if all(c == self.pal["grid_correct"] for c in colors):
-                dlg.destroy()
-                self.show_victory(guess)
-                return
-
-            self.tried_words.append(guess)
-            self.attempts += 1
-            dlg.destroy()
-            self.current_guess = ""
-            self._refresh_current_guess()
-            self.submit_btn.configure(state="disabled")
-
-            if self.attempts >= self.max_attempts:
-                messagebox.showinfo("Game Over", "Out of attempts.")
-                self.reset_game()
-            else:
-                self.suggest_next_word()
-
-        ctk.CTkButton(frm, text="Apply Feedback", hover=False, command=commit).pack(pady=10)
+        if self.attempts >= self.max_attempts:
+            messagebox.showinfo("Game Over", "Out of attempts.")
+            self.reset_game()
+        else:
+            self.suggest_next_word()
 
     # ---------- solver core ----------
     def filter_words(self):
         return filter_words(
             self.words, set(self.tried_words), self.known_word,
-            self.absent_letters, self.present_letters, self.yellow_positions
+            self.absent_letters, self.present_letters, self.yellow_positions,
+            self.exact_counts
         )
 
     def suggest_next_word(self):
         cand = self.filter_words()
         if cand:
             nxt = random.choice(cand)
-            messagebox.showinfo("Next Guess", f"Try: {nxt}")
+            # Chun : surface suggestion inline (and show remaining count)
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text=f"Suggestion: {nxt} ({len(cand)} words remain)")
             self.current_guess = nxt
             self._refresh_current_guess()
-            self.submit_btn.configure(state="normal")
         else:
-            messagebox.showinfo("Info", "No matching words remain with current feedback.")
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text="No matching words remain with current feedback.")
 
     # ---------- victory / reset ----------
     def show_victory(self, word):

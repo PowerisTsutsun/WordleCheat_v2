@@ -35,10 +35,15 @@ def _apply_acrylic_hwnd(hwnd, alpha, tint_rgb):
 
     data = _WCA_DATA()
     data.Attribute = _WCA_ACCENT_POLICY
-    data.Data = ctypes.byref(policy)
+    # Chun : c_void_p needs an actual void*, so cast the struct pointer explicitly
+    data.Data = ctypes.cast(ctypes.byref(policy), ctypes.c_void_p)
     data.SizeOfData = ctypes.sizeof(policy)
 
     SetWCA = ctypes.windll.user32.SetWindowCompositionAttribute
+    # Chun : teach ctypes the signature so it stops guessing
+    SetWCA.argtypes = [wintypes.HWND, ctypes.POINTER(_WCA_DATA)]
+    SetWCA.restype = wintypes.BOOL
+
     ok = SetWCA(wintypes.HWND(hwnd), ctypes.byref(data))
     if not ok:
         policy.AccentState = _ACCENT_ENABLE_BLURBEHIND
@@ -66,11 +71,12 @@ def enable_glass(root, *, use_mica=False, alpha=170, tint_rgb=(26, 20, 40)):
     """
     if not sys.platform.startswith("win"):
         return
-    hwnd = root.winfo_id()
     try:
+        hwnd = root.winfo_id()
         if use_mica:
             _apply_mica_hwnd(hwnd)
         else:
             _apply_acrylic_hwnd(hwnd, alpha, tint_rgb)
     except Exception as e:
+        # Chun : if we can't get hwnd or apply effects, just skip gracefully
         print("Glass effect unavailable:", e)

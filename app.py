@@ -13,7 +13,8 @@ def main(theme=1):
     try:
         with open(resource_path("words.json"), "r", encoding="utf-8") as f:
             data = json.load(f)
-            words = [w for w in data.get("words", []) if isinstance(w, str) and len(w) == 5]
+            # Chun : store words uppercased so UI and solver can treat input consistently
+            words = [w.upper() for w in data.get("words", []) if isinstance(w, str) and len(w) == 5]
     except FileNotFoundError:
         messagebox.showerror("Error", "words.json not found!")
         return
@@ -22,8 +23,15 @@ def main(theme=1):
         return
 
     root = ctk.CTk()
-    root.geometry("520x780+200+80")
     root.minsize(460, 660)
+
+    # Chun : center the window on the screen so it feels more polished
+    w, h = 520, 780
+    ws = root.winfo_screenwidth()
+    hs = root.winfo_screenheight()
+    x = (ws/2) - (w/2)
+    y = (hs/2) - (h/2)
+    root.geometry(f'{w}x{h}+{int(x)}+{int(y)}')
 
     WordleSolverGUI(root, words, theme_idx=theme)
     root.mainloop()
